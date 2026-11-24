@@ -1,8 +1,8 @@
 // 電波がない場所でも開けるようにするための仕組み
 // アプリ本体と問題データ：まずネットから最新を取りにいき、つながらなければ保存しておいた版を使う
 // 文字（フォント）：一度取ったら保存した版を使う
-const CACHE = "rekishi-drill-v1";
-const SHELL = ["./", "index.html", "data.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+const CACHE = "rekishi-drill-v2";
+const SHELL = ["./", "index.html", "data.json", "data-nihon.json", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

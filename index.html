@@ -34,8 +34,8 @@
   --ok:#6fd19c; --ng:#ff8a80; --okbg:#173326; --ngbg:#3a1d1d; color-scheme:dark;}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6;-webkit-tap-highlight-color:transparent}
-#app{max-width:520px;margin:0 auto;min-height:100%;padding:16px 16px 32px;display:flex;flex-direction:column;gap:16px}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:1rem;line-height:1.6;-webkit-tap-highlight-color:transparent}
+#app{max-width:32.5rem;margin:0 auto;min-height:100%;padding:16px 16px 32px;display:flex;flex-direction:column;gap:16px}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible{outline:3px solid var(--shu);outline-offset:2px}
 h1,h2{font-family:var(--display);text-wrap:balance;margin:0}
@@ -81,7 +81,7 @@ h1,h2{font-family:var(--display);text-wrap:balance;margin:0}
 .ucheck input:focus-visible + span{outline:3px solid var(--shu);outline-offset:2px}
 
 /* 出題 */
-.qhead{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted)}
+.qhead{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
 .prog{flex:1;margin:0 12px}
 .qtext{font-size:1.08rem;font-weight:500}
 .choices{display:grid;gap:10px}
@@ -106,6 +106,12 @@ h1,h2{font-family:var(--display);text-wrap:balance;margin:0}
 .pinlabel{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:4px;white-space:nowrap;background:#18233a;color:#fff;font-size:.75rem;font-weight:700;padding:1px 8px;border-radius:6px}
 .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .nums .choice{text-align:center;font-size:1.3rem;padding:10px}
+.fontbtn{flex:none;font-weight:700;white-space:nowrap}
+.subj{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.subj > div{display:flex;align-items:baseline;gap:8px}
+.subj b{font-family:var(--display);font-size:1.35rem}
+#subj{border-color:var(--ai);color:var(--ai);font-weight:700}
+.ucheck.era span{font-family:var(--body);font-size:.85rem;font-weight:700;min-width:0;padding:6px 10px}
 .trap{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:.85rem;color:var(--muted)}
 .fb.ok strong{color:var(--ok)} .fb.ng strong{color:var(--ng)}
 .primary{background:var(--ai);color:var(--surface);border:none;border-radius:12px;padding:14px;font-weight:700;font-size:1.05rem;width:100%}
@@ -146,6 +152,14 @@ textarea{width:100%;font:inherit;font-size:.8rem;border:1px solid var(--line);bo
 .batsu{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:51}
 .batsu svg{width:min(60vw,260px);height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,.25));animation:batsu .9s ease-out forwards}
 @keyframes batsu{0%{transform:scale(.3) rotate(-20deg);opacity:0}25%{transform:scale(1.08) rotate(0);opacity:1}40%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1)}}
+.split,.qmain,.qside{display:flex;flex-direction:column;gap:16px}
+@media (min-width:900px){
+  #app.quiz{max-width:70rem;padding-left:32px;padding-right:32px}
+  .split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:32px;align-items:start}
+  .qside{position:sticky;top:16px}
+  .qmain .qtext{font-size:1.2rem}
+  .map{max-width:620px}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -154,15 +168,23 @@ textarea{width:100%;font:inherit;font-size:.8rem;border:1px solid var(--line);bo
 <canvas id="fx" aria-hidden="true"></canvas>
 <script>
 (async function(){
-let DATA;
+let DATASETS;
 try{
-  const res = await fetch("data.json", { cache:"no-cache" });
-  DATA = await res.json();
+  // 科目ごとの問題データを読み込む（どちらも data フォルダではなく、同じ場所に置く）
+  const [sogo, nihon] = await Promise.all(["data.json", "data-nihon.json"].map(f =>
+    fetch(f, { cache:"no-cache" }).then(r => r.ok ? r.json() : null).catch(() => null)));
+  if(!sogo) throw 0;
+  Object.assign(sogo, { subject:"歴史総合", unitLabel:"講", hasStars:true });
+  DATASETS = nihon ? { sogo, nihon } : { sogo };
 }catch(e){
   document.getElementById("app").innerHTML = '<div class="card"><b>問題データを読み込めませんでした。</b><p class="muted">電波のよい場所で、もう一度開いてください。</p></div>';
   return;
 }
-
+   // 科目ごとの問題データ
+const SUBJECTS = [ { key:"sogo", name:"歴史総合" }, { key:"nihon", name:"日本史探究" } ].filter(x=>DATASETS[x.key]);
+let SUBJ = (()=>{ try{ return (JSON.parse(localStorage.getItem("rekishi-drill-v1"))||{}).subject }catch(e){ return null } })();
+if(!DATASETS[SUBJ]) SUBJ = "sogo";
+let DATA = DATASETS[SUBJ];
 
 /* ---------- 保存 ---------- */
 const KEY = "rekishi-drill-v1";
@@ -173,6 +195,7 @@ const S = Object.assign({ items:{}, seasonId:null, seasonXp:0, totalXp:0, collec
 if(!Array.isArray(S.units)) S.units = [S.unit || DATA.units[0]];
 S.units = S.units.filter(u=>DATA.units.includes(u)); if(!S.units.length) S.units=[DATA.units[0]];
 if(!S.stars || !(S.stars.on||S.stars.off)) S.stars = { on:true, off:true };
+S.subject = SUBJ; if(!S.unitsBy) S.unitsBy = {};
 
 /* ---------- シーズンと称号 ---------- */
 const SEASON_DAYS = 14;
@@ -228,15 +251,29 @@ const shuffle = a => a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(v=>v
 
 /* ---------- データ ---------- */
 const inRange = u => S.units.includes(u);
-const STAR = {}; DATA.terms.forEach(t=>{ STAR[t.unit+":"+t.term] = t.star });
-const starOk = b => b ? S.stars.on : S.stars.off;
+let STAR = {};
+function buildStar(){ STAR = {}; DATA.terms.forEach(t=>{ STAR[t.unit+":"+t.term] = t.star }) }
+buildStar();
+const starOk = b => DATA.hasStars===false ? true : (b ? S.stars.on : S.stars.off);   // ★のない科目は絞り込まない
 const allTerms = () => DATA.terms.filter(t=>inRange(t.unit));
 const rangeTerms = () => allTerms().filter(t=>t.ask!==false);
 const terms = () => rangeTerms().filter(t=>starOk(t.star));
 // 並べ替えは3枚とも★なら★の問題、1枚でも★なしがあれば★なしの問題として扱う
 const sorts = () => DATA.sorts.filter(s=>inRange(s.unit) && starOk(s.items.every(it=>STAR[s.unit+":"+it.term])));
 const tfs   = () => DATA.truefalse.filter(x=>inRange(x.unit) && starOk(!!STAR[x.unit+":"+x.term]));
+// 範囲の広い科目（日本史探究）は、問題の時代から前後 DATA.near 区分の用語だけを誤答にする。
+// 同じ分類の用語を、用語集の並び（No.）が近い順に候補にして、その中から選ぶ
+function nearDistractors(t){
+  const ui = u => DATA.units.indexOf(u), base = ui(t.unit);
+  const pool = DATA.terms.filter(x=>x.ask!==false && x.term!==t.term && Math.abs(ui(x.unit)-base) <= DATA.near);
+  const byNo = a => a.slice().sort((p,q)=>Math.abs(p.no-t.no)-Math.abs(q.no-t.no));
+  const same = byNo(pool.filter(x=>x.category===t.category)).slice(0, 8);
+  const other = byNo(pool.filter(x=>x.category!==t.category)).slice(0, 8);
+  const pick = shuffle(same).slice(0, 3);
+  return pick.concat(shuffle(other).slice(0, 3 - pick.length));
+}
 function distractors(t){
+  if(DATA.near) return nearDistractors(t);
   const ng = new Set([t.term, ...(t.noMix||[])]);
   const pool = terms().filter(x=>!ng.has(x.term));
   // 同じ分類を優先。同じ講→ほかの講の順（講が増えたら全体から選ぶ）
@@ -250,21 +287,31 @@ function distractors(t){
   return auto.slice(0,3);
 }
 const MODES = {
-  rengo:{ name:"連想ゲーム", tag:"入門", desc:"ヒントが4秒ごとに増える", n:8,  list:()=>terms(), id:t=>"R:"+t.id },
+  rengo:{ name:"連想ゲーム", tag:"入門", desc:"ヒントが4秒ごとに増える", n:8,  list:()=>terms().filter(t=>t.hints), id:t=>"R:"+t.id },
   ichi: { name:"一問一答",   tag:"基本", desc:"説明から用語を選ぶ",     n:10, list:()=>terms(), id:t=>"Q:"+t.id },
   sort: { name:"並べ替え",   tag:"流れ", desc:"3つの出来事を年代順に",   n:5,  list:()=>sorts(), id:s=>"S:"+s.id },
   tf:   { name:"正誤問題",   tag:"意義", desc:"文の○×を見抜く",         n:10, list:()=>tfs(),   id:x=>"T:"+x.id },
 };
 /* ---------- 地図問題 ---------- */
 const MAPSRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA44AAAOsAQAAAAAt6NUEAAAhtklEQVR42u1du4/kyH3+qsid5gmDbco64yY4aSg7UGJAAzjZ4KChLANOFTrzGE4crrMTIN3USAou08LRBQLUf4JSJRZPvmADA5rAgQPD5h42GBgwVLNqC+xRkeWA/SDZZFWRrKq9x3Zwt7vD4de/qvq9H0Uk7H3u48tM+1BJLSKCIzV4yirkijCDp4jNhSWkgt+F3eDP4HlhC6x9Q3JEBk8Jm5A5cpO1sAmZBUZrYfPEkiU3eOpjq3xp9qE2eSQ2Wn5qk0cS31SaSVgwi5ArmEhYaVHGSmoiYVGG9qiUeOz7xP7R7DFhEbIw45HCIiQ34xFucS9zYsQjiOxBZpKZqRt7kCww+2axNb6U1EiPgLxnjcrK7MACqTVIYXZgpUVRUJgJdZt27IvE6E1laM/cyol3q8BU2RN7C0sWhZG18qe/o9ZUV2T24B+sLawpWxahNUhDtgS3d3yM2TKyBsmNbC0gt0elOVtagzRlyyy2BslC/z6JIVsisQVZmmpLZo1KU7a0uLCmbCmR2ttLZvykJU3y4puV2Z6H0laoKX9svpGWIDPDAysqawtLznOzeMJblaWFlSN4xNLCVsYWpbW9FOb8a2svN5Hha+6/JiztZWH8ZGiNSQh8Hx9Oje0Va1SG3qnMjR+MrFEZeacyM34ytkZl7J1KNmY5LFGZ+KZSjvpulqhMfVNZjXraiiYpQ9O3kMvMjiYR8J8nIWM2/XObDaLeIYtRDPwaFtYKk9y/U5jGiaWl9Dd/XclEr5D5KMlI/dohxBTyp94XtvwRs+NdmkN+ojOn8nFkSu0nA5bqJ3AtzT6CSGkQzr9JgVde9/KeAVBn0KRlgVerQmUowNwoKB9VeoF3D2CZqUVaZZdKAgRC0kDY8KGNqNwAOIWmJKsgNo/PHYCnwNPSniLRQeZAwIBTkNiCD20EmQLv1U+9UiXRLUJKnMsMAGEq1myJ2GImZIWrPbXDcpY1YMqvzGSSzVvVrloSg9ltSRuC4v5PSo3Q0DDJvprsVLliTe+yYro1pZrqiu0fAjbseFRNJ/qX+rgB1cZM6s91XhlFJ0xq8dSq8nz/x2rwyaL5E+Bc8b4KWn2ZJQ1hO7RJIRkni9SQrOGQM+UmFQxWDJGqaYFkQysmAikle2f7G1goX3itWdjKqPpUVIBk/wN8AmAnO6bL2MogtBNKQEIy/Is26kQMIKV5rdgzXANALGZRSY3jaXfAV4lJXC3TvJUUJpFBWnNGbuKeMC0hJ2YMl+GXI4wvOj+4QpBvlzSDN/+Sy8OX09i0uR7ycCKiYlhFP+BxZrQwqZ5KIzGWbCJ8/8KYrcwXNhQqDZ2fbp0+qv2aegtv/2SlgsyCFawXHhNVLJ8AfydZbnTIqYVw9i7dkpplMKh5mJ6x4ezT227iPqniHcXBhmBzq5qYQc6HZLgwlHaJLenzhGQj4iMjIJPBdy2qxrm+SmY7e+YflkIAq1wTLabWU2mp7h0ayI9H7uqazmYSNtJB/0Olf4yaCxyTCOh/UVzEmiwOta7Bb7kmcKvxosOR+eHsVK9OqMVkFrMhY4toZO0Ai2ef2HhcWN+o7kfjuCcYn6ot5jnuKUaXGsVnsyBb6ooWRtYKv9O5cspYAWv5owtN5DxfFpCSL9TBdU2s4GakGAjJXCZpG1hE2ElKqx33cfIuN6jw1XZahID9rJ4SUrSVxwewkvKnVktBitl7WcQj5XZ0qlWrTENlW96lWi+5WM/NX3K4qFSjI6y1JLeSBqdjrFhuobQp00UqrWfBmYbKznGJCyMqqzkLS2C/VkTTJvjjDtcJE6sl/KxVT6RqSBmOZjphO6CmORiPEZ1qRTFXQlbRuK/3Si/wLJb+GbscmgfE+HKkam6TcjyWyvBk5vEpRss/8TC3JDcZixnObTjn4+tDpfaLVZZtOAqA3Hyg7v2mY5ygRG2J8KgCg7xWUhlY5kuqVT/hgxIym8A0me3ZE7nWgEtntrCwcbVveVxTmam1vmV9yaBL544cXRJyk6VnqVerIE11Iorl1K49lWW6Q5ZchXbrBNOfAalSx/39Hx2YW9kKynlUoyCJmB12Xoe2j09SaFyXW/X2kImwF+NOxMdsFpWxAPJbzap3ok/NEg1yFJz6ia5uplhImS+VJSDd6NbabEDYMOMKNfc+HC8sRzm1IHQv+GNlKeFFF3LVkFc9sS2jgk0u1CzUkT5s+U+/Piyy/QasHKxToSbxNN2ft2eh/b6djAC4bB9YyRfy4+2fjwOrN9oTG0hZEEVVNJGCtphIBIg25SWr1zXCtF4EqTBzKUDXnfkXIUKsatEUTyv/CUc1BPAIwbYqFumoFrWWP8GGvYOwW6CQXwBZXfsre80mE3FIh4uGC5x1qczS+rumQIXF1K7H4bpWfuxFMwbE+ADPAYH3e/g4n9eBtTraS0kAROQGG6AI2NjAYG6wFlkHsjoBEFIASX81caLsDNglS9nguWNH8dh1BCAQYHiJvDePJBODZKnCdn4MgDZZjW+/5hVKZFe94vOlgXRlg8vPLrp8u9rScAacfyp7dVOZZpj++e41ALDrRqHr7s85EPSmrJRVmlsZKzNlckzQhgn4fM/p7wKnA5bSZnZjLT0442VKDt41LoZYLsHMD43zQwsQbei1bIitXhqZeSrI6OWeyMZZuhxQsxdAqXXfw0pjx5bbjoaXJvURS64wUDJdULZmHnoC3EfbTTcIPyyZ3uYa7GhZbzUNgE0KbABiIrTf1x9VqhbCdXHgb4A7w2ThidI0KJSQ4RYyrUXnCgsjd4RkBhWM6ick33mOl2YdacVg7xou63R7xQYe+G0tfWoxI0MEhsJzYRCKYaojTRFk15LVQs7QMc80/jNRaxoKXDI8HVOMdjGz35/uOlSWxr94mmPWIAW67VAh5hlZynXZcXVIbctDPxrRd0cKwEIz5KjAyK+0kc3cdgwvSaZFfqoZYUOucd4zrrLiqV03mQObzcUAleV0yOGiecQRCvz7QEyETl/YgQr2CgAvwFGulI6nxRheQABEyIGVUPHtFMiBovlS7mV3r0Wza62jFudpEHV0WsyA1IcMqqG+3MmDIG56/eTyUYUX3+YEQO+07oeTGfcgpMqfPtEIOmp7UJLE33zYHy0I50Amimw5AftbzwUbEuxddeSEzopF3vd1werGWM+j8pb1BtKYUmHOU14tL17sWfL77qgsB5rAY6VGnQW57ltAApwpfbhpkFtZ8KzFLof24hNnVJZsUmXbHCb5pC36DkeJpLEbKstukDjua262CrnuCJnGav5j6gbytuv3HUh7m1mHzOr/nA3p7UCl1un0cT6s2wOdmtVnhjPGFgXsPjPOh1XZiMk3PeGC5bYbnZ93GvrzpRjIBZWHSOUUIsMCQIWnYwoN6czjI1CP3WjKNUGcTqQqAaxP2j6Y8TSRSZAUCfDsrC63GT0AJ5w2/u4FAS47p1j9KknsGCLpiAKkdB4k270jMU6HHfhyloqWTTI1/VYEs0SBzOvfFGgWKZwrRYGcJwpwthXdQZOKK6d8GdZBOHFqOAtm7HSxvs+/Skgpi/NWst7pwuK9I7dWGPcEzOLLIumOpUoufA4apICm1se29OGRMvKVW4Lk5tL6lw4WdlWYfjsKP9c9MEuQuXFLa2Ht+LBjw1lod93e9TY7c6S3QP8/bUFmR9Pzk4v+Av1PHFC5Xc/8tv+NH9mCJE2TkimS7WViC5KZGs4idbCw6jF8rRFZ9kty+8zZ31sT67RHxPaK2rdtQTa19CoyFob2F1Y61Zdhp5LHrIqN2iXN5K5AaveYZjGZO2zHlB3EiLny1I5W3vXTM7tjaFSfh13OINkwJy5tD+Rewj9nS5dUxl0RK5GmTvdS9Hjt13PHXWDMJSAAgA/0tVHUzrUS+e6+8R+6pbI4kndSvq/Pz9u6HSnfWiZ8oCjWEiRPD3IoGSwAOCKcWjHWD/LulnbNoOrMycI2QoaPutJnndiJFXRmqXDsB6su806wILMUKzi6KP0gkbq7+T2bTNLvwHVqDcvQIqQkx9qBIemUHazP3Ai8ln3XppJfWYTsD/mmnYVcMZtU0mP77kh1yZ/YVNGidylZx4499XCjTvv09EwwnwFZhMfyLjnKXFxZpTI6lnc52tOWXvXY7jMg+X7NxL4mJKHAXzWe+S2zq6KTHnmHeib87lylFq2CTdpogT905H71tDONYmUP8u4W2X7Rsv1B+spRg6c9yLxZvc72BymMO8HTxOJeluym515I2a3WSu1BZvhFQxLsjayHO4M26okWARDuO04eDsXg7QFqGYi9DIJsitjm7ZdNW0umOLF3O1IZAvurNe7j/Uvuv9qQt/3XCky9HUkseK/l0zo/HJ109azjU0QNnm/05vO2md7bvTcR8jZuNLsdJAHiphhnOLF4YnFZNztJKaVM32kYtJfNdqlzezmvEilO9rRlxdBEjMSewFsDIP+xPzHxkKGS2YPkYAcSqiYxT3hD9hCLLm3rPvNWmCksGt/rsc16n5OWJGW9W5kP9GRMZJKzoRg3FQ3NlVoU662mnqwhu4tzckjBE6uJ4dbG0oEIMLUaEUkHi0PYQb+cOgs1sVZsKWW6XgVqIQATN12c5NC5d+UKsuqItbyPd+ZDMgwGnOOd+HlGnIUNOwNcd50fw13n1F7AeZsyFbv1PnFRktsJOLfaMIYnLFDbOb2d/cYtB0cTRZnYtkdwNdhoN5/KrLOA28JyNpg5odZvUa4nk5aImCtI2V3AeOuWvGOZSbKG8Mn7BmiK4S5xOncGy9G760bsQnk5BGbeSdt5dz0B4RbupA/vCNz6SqxNSmwnLfJ+Yw+I6yFYhWIE3XwmOXpDwgHOQneQ2dG74zWQK9JQ1G41UwEgKh30BqkH9IdIAFwMws6F3LTZkidAgE/BkErLAo8PsiUAJr8OsFe5IyrbbFnH9VK8BLBwBZmToY70yNXx6QxHzBgwZKXPgzxQwHreHzCEF7Yv4i6/ths+RdvBpNrY2kTh/z5WzP2baarHPYu2yANqe2HpoLbcerzCpfRJ+4ZPn6iO0EzI5/2amDgsZcjI+GHL8yDlkCZm9iHjGWk6OpNHBsTapXXI3Va97I3xalaW+rmm3h5keyRNaTaOmc5K0LJH7ZLUyiGVydYFqobWOXcmCv6i9beX68hgk+mc4qJXHT1yGFalajOd2YOQdrL38S4Hl9qG3BYX5UPs99IZXx4L9Xo9f5wQ2DZEbuQPFkD3RvkyrKOxZQjFVfPlpKhzBZmdS1l2Ui+7kaEcUEytFZMKNj4lSBfAH7v/vih2pvyFbSZZUQkBFB3DZ3fNUO7A82JhheqIR/Z54AyB7dayCpcFcC1Z55fz7dYq7+JuNfoZfwQkB2iFR703hVdw0M0WgAN43DWqUuDTgd7vuXspQuRAte4YqyWA81R/H+DEhvPa4Yo7SvSuxPOj+7FsCbxaNyedAyvWEMeXVdmBlIgYQNKOXqk4Sv3lfJMgiwrx1VGSIIdMAKa9bWOq7ZOcDZzMldbsmyJjQ9whXfQ66NfkZ406IJtUrsDw0JXdGXLCrtZOemkFQKSUv++Wy5IikAUkcdNLS/sCHxQhTvRzmOnsfplGAWcYgWBF3UD2C5iAA9nvHFE5LGCSdegAUqA3AZsIADirXFBZxIozEjpxg3jSO5EzLusXRg4g8/T9/iOV1HM3HEBmSzZ05QCANHZxYtnALj4ABvNBpzgIQyP4av+g/F6m/O0pkUqpJj9w0c02s9yE2r1ZwVV4IrScJHP/ofZ69it3kAKfoYW9NDo+E0TB5h0+IAqM3jVFFITxvEt/qP+j+DlhkpkiwiIkjWTimS9JXL3wvbC54ZUpNg+GeB0nNvMNWTijcvBcPnMFOUjLPXsNe+nKEBku6ltYEQUvxlwEFcU2IFcbWzPRTSFlT9Hg0RWnI0E1kA89uaRsZmqRahmCm6dDi9wCZN8NKIOImcgsjG3LFrwbOarIcCOWyVUculBT9v6ya7ZV1K3xcFOZXx8vDQ1U9VeWtFVuv4usDzgI1JaM7Wayi0F5FF5ZmIdXhcfsxoekmjCTdxpIER3HzlaDsjteXs2H7FONgznfAviIz4bkfbf7sWFrIZxPZc9pqIK51o8asidXPxz75IYKX/1Qz77xSFXGJeZCSrAjTbKK514rS/VTe9qLy64mxoTMIO/okRFQqmXubJ+kZ9auZq6xnAuZnu2KQduEu/Oiyx5XYHU647YLPaRA1pl4AKkZv2uymSrIO7JVmc0TeaV0D5KZVOb7HqaPo31HK4PLKEZ2tlWZ9/smhttgviOkopJd7VXmLgec2RgNpiyxkVLypRTYVdNUqlqM/FJKfjnLqKzV1G2MNYBX+tNjgS9rUy5LcAtc1SsrVLmeODf0S4ZXgC+llBLXEgiKemWLQLFi/Lw9dnmKtR7X+qvEUoS1a1KcTp5Za7SwPAFQEQhwBNsazdhCYoHqH7gLAGRIoa/FMHJqqSpnWH/3/BTAEzOHNbRApYjq7OACXO2z21FebKt1r4xDOlb2ssDW3XtSGMUpi1mQNV3FOmjsEnNLJRl5pYIFSAYApw/bsYXU215SmV6MSqJNh3yR1IkiAuNpokViJvWGIFefrvssKGYhuj4EyWQctq/KihwvrDxghI3vn+jE6wz/sjpojWiUNRVPhhQHki4aL4tzbcXK9L1csC1Fba+Wa0vXpkNG7wfbKBkzu4Zy3yI4VcEV8UL0BAlDHRMwOZ3KpBuNKJLhgpTeCYtjIfd7dhuNSZYbBU51z2QXRhcW7xoh5xgiab+TOuuuekP7iFy3Il1Jrg0zzldeHeGiYMybeTJ2T8xftw9UVMyWd1oqn4zah8JBZo8KZRzeSf6ympjA1UMe/2qeGMgCbpfKVGOJVKFhos0YchtXS5mzxHA2OtQqIsWAHQPIeChSpmo5NLR1qWkgn+ryokU8s2CDDwRaY2fVE0eCbbdmEVcxyGk6HTJ8gGE+r8nL/C/ZjCrQocMXFkMnPDeMAA/z5YemKcT9gU7nyVjCNtEYuS5zbU+HgSGyGSM9qxGFBQqjMm3LhtqGJtVco2AQ8miY9z1uYsClF33SWaZoOyoS1wNuk7GGHoQk2bEFUikyIUkVmsZoBr/bJefo3MEqhzVmaGwTqPRldKxJ2PBrUxHNprJrzF2p1TArYjtxn83hPeeSK5R+3R45l0oAuGtW3tRzUQZ998QO5Ko0LlsyD9XSEX0ckUphZhayQcW5lO05t8Vy95+++iIpZX4t55YYybY4DxUKUxI7kcqKtKZ/q2ybEbVOVGk70VbXFlXFpkIbVCYQYSh/QDtxSNFr9Raws7BFFODDQ5k2GbDaN4WyjmNMagY8BgNetnX/sY5+HmnqOMaUMiQ9+UrWy5IssQHJkaVt64ANFkiUtR7N5gVhokIy2TM4NO2b7SUO1w7PoXLzQACSNb4VG1jZtC5BmL2wISIK4DsG4QCm72Y1ggyOVl1hUdVDxvL52aAIwMPBInkIhxzsErEVUZDiAsDd4W3FoIe5m/g1V0VfIG1Hy2+jIYVzV5OezaXyMWGAZIfzkg2u3iqAnWRiVddXHzY3UZ8ewxYo3eG+a65fqhnoyqzUrbc8MDaQ+/pgu4vUxq3YeWOgzHbmyHFNBi7qOo4qkHJ+eXXeM8vreEdvwzH1E7qK7sYNC3R4ryKLieHmgNShwhu5S8VVdkznM+WtQx2FFtkoIjdxGauR5QY6KlOTi0OCUe2nmiJyYvL9I2GzroCajS8YkSXR1q1bG4Jn7tKGRhMTLEKWSWSSXUpHRYDVkGuj3cltLiw3iuQcQpSJ8wa61MHxyTtvzXrjpDd2632YQe6HOmxSjnqVohyrwqjpremDZ7MxZiufD5l9MGN8wdROC4OcjxjbmqiEvJk5eGc8pDT6jUKbthlDJZ3XQDzhrfZK78x7EEKTE8ptNpx381yFWtTaqCvgBrvGG57GD+dD5vrjL9/ei5wKH813ELpdXvz4UP2macRyC/U+qY7171Mwcrk/O9FsZ6/7szqOLc4bl78B38DhL5dznb2j2HXe4YQXMYBPyVgzgY6PXe92+D5pvYFbcNyPJQFrcecztEJ8uY0BLZGSWyUD8MGT/VOZBYF3lDj7uKX6KwCXLNwdYLOSFB2T9KuILN0zxXmGYFdF+WAn6qy0FAoscwDXbN+WNX/yTX/ibN+ayAM+zYweY1RS4D5+uTuX+bsjOxINpE/3NnQZSJlhf3seu241aOFdLORc6ZP1/xs9KiJ9BlTAP1ig8qaHShxGNh+uDQykLADJltJGQK3n87QbaK8qoIgI0gsX1YYSWLCuXyAkwN82P7VjbtgIgSCPjkphCzDklOKbzDqVEqjCOG6Kww2JAI4MaQJ8wwFfCiA6vWrGQZ5jwwDc3luyY6s+0H2wNE/re7ZX9c2+dqSPVCqXjNWi/K5WLcxKYvjom5fNe+Bv9rH+5Eo7sNrcjlXos5KiXlQBfAScEiuJ4fROsbciBEq2qLbM8xR2EsOif61XO3/lJZ4QAYBhycbEuBRdo+Ro6jCklPJ8N+gckLIKZHYdjBperKDyVCoiJFmCEqT+l8xaCDg4sksvqx3vSJa+EqN1s0Ez5GqQax7AlvvIU24P8uquz9KqEgB3pNyrsMwilfHDYKxrRdfAN2SdNuaw1XAui/YPt1k0cSmlxDIHvoMlx1JiKW2dWITt80P+bb+jEnEOZFhzxFaPD+1s00VTEGUgQJkgkYMX+UzJX7I+H1VIKQWWeFpLu0sRjL5FQZUw7etYL6WUBQBxXgFBdi0W0t5e9u/T9jdIkFdAmJj1AxkbIrqXBVmkv4Ng7Egh1S8+F7iYkAxSQ6qNi18VYVRMyF1My5Pc1Tf2RCGQ5VbzJLQYbLO8inZywrhefeYV1Ze/4NsTnVtOJoqh+TQpIIErEcV3N1YhieqbbAOG4303OnnQp8ACBaLS8sJ+MFihB2BRgMfh+PHZ0+4NwidAcYZwldDxXeF0yuglhhK4TcqSpQSWFzYd+CJXSJGla4CBxT4W9oH8HDkYOAiQJnYhk5Zk2bDdVKoAvATLQYEkdUnl8+1I2lUIVgiCDCEQM8CiISLzliWyC+xgKfMFDySejjQITO6Aag8lwvl+lBEPeFARsZwCOSoikmzNO44IHBUNYgcTNvIenhG7O8XDaZNM1J2qm2/lzVrV+tlNtCgkleH/vcOnII4a8R4cNAlBWhWx8+HnRLSrtThcQIZ8SPSmYKvE54h3hiSXLPUGGQIZ4umTd+jke82n6C3D8cPWK8boxF8pkFAnkAM/fcKBJPZ6KUHo+x4EUht5UegLstydnhNHVB57CIIBFMhTEjmBJKp0ohsZ2xfSZ5g59IuOvZboUa2pM2cn9ngGDAUuKqdMkg0kqYkzyDQfiM0wZ5BJ77F8z+XCxsVA2Is6g4wGVJqcQaVm/Em5EH1tgd/+77eKqYg6o7J/HtTTxOFe9i7CInHKlwPzoCrv9walc0bVUStXjti1KfLesWUbd0wCsuR9v9Ryyewyiey1ZMnruHaqcAdZ9cZHr1MkziBFPwfeOlzYgQVcc4dMQh9ZL0nWHZ+vF/0HOXUGyWHf29NZBXz6WH7LTlT2a3eGyByenwYZPsy6OHCKWN8F0bqAZDqb6MQ6GTgo1KUhkll33bXNkPlg97sryAs7bStjIHtHwMzSXVrI3k6YZI6I1do+/R5CNMMnKSddR35CnNo+fTxPTvybW8/hcC83b9luStLuZUG9X5/K4R0yP7UOqfVJznPPeylt3A4yMjzxyHoXnY5KQb0fn7vQO2R+5h0yS3xDTk6lTT+xhndr2zyxAvC9sANTn0qXx6f/x4K5g8xfw93fZa/BGjKXymsNVbbfCWTlX0VL35AJZtnlE43K3DNk7MLeUkOeBnztGTL4+WkJ3xaepJeZZ2ud2D8/1PrQhfmQDN6TFqn0TmXiX/rgDeTnBVJ7X/eLc9+xAu/K6/XsZeZ/L4n0vpfki2/hOTlfn8UTG3qHfA0Ogr0b/T7LeylivNGXTq5PfWNufXHC+V+Khc38QzLvkNL/wlYOgrRUF8LLdRdS2Ya87fEvf+o4g+Bge7V8mR5t72w7Qd3thqfHDXBTuuaav6+2/2VwfGTld+eJh1ID+Uj4zpNU4ZtYgc+69TcL62h4gFMq4zd76QTSgXvwGaSSv4a9TL1D5v6pHD0J5XMZdaYOwj5qq0DSL4P0cWL6qCFF5B2yiL1Dcv97OXUiwXTI0kUZlVoUvEhc+O1KUbAi8E0lCYRvKhH6P7FnvhfWhXM5dlqK+4XtbVNJvSsv6RiyZ5sf/KvowrUoOP7Z/dL7ieX+F5Z88cwt4uYbUp+jWT6TDkL4ZRDrjjT0Z4xJ5JvarTeQbyDfQL4WyOrNwrqBXPuHjL1Dlv4XVjjJsekuJRh1Z5YFyAJXAB5WHo3K+3cKAC++VfgzKvkZAOTC514mAJBVPtseUuDLUu9DGPMMKU5Sj1Tm9cU5iUfImrw49wd5AzblKocZ0kdSUgF48YvvXvqSPq4MH8XCinpyaj4whsbN8Yl8U1nUN8hkPtsezlkz2rTyAZlsqziZ9eyXtvubWi8gHYLkaUuRPPM4BGv7/ytvkNVr6JqJPPaT5P4LqbalGv4LqQoLpanGkMxVj+kgZEm8lxitt/+eCm+Qt+Hu3Ppq1Nkn8Ji3hX3Y5oQzf3tZ7I+qt0ad2y19xB+V2XZsx4+9QUp26rtRp9oN+wu9TdgQ262UHo1K4r0daT+rLXIhDHohuaNsl2phzxoXQPqBzBOHbdH9kJnb+Ghv48r2vnRxLom0/eltYdlPcC3/PLefHO71oisC3ye2MZHOfXQr7Eyk43A9nE6WXUuyck1lBQbghbswwTGkQAZskiY7Rs6PTw582FjZQrgu2LiPl7wMsR+XL9+6/1bumi8LrFvzfwsffPmsqT08+JfvCslayoM7H6f4Z9VD89ojUrmn8gUK4P3mCU6d76W8xSVzXJlC2/EPlgVN04P5aGFh7/ptxQ552o5jpV70JXM8hKYLWSQB4DnjHrdVckLdQ0Zn7pPuHX25yD0v7JHeiFw4J813vsgjH8V/TSpXaQx4LeMsQ3TnGMq3CqdlnOtjaUMit24Q6/GJfiZdukGS4rh/5PbCycJuF+8VcGp688LME1tudnYW4fDykbx2YAVwKX18BMVtnbZbI8j8EEllipf1ur4LTxXdPAZIBUmdVf0endhntSH3Cgv4KopjEADDLZ74giQIBMFlRkgFXwuLEAx5iRP4qzZ8HymwdtRG1vtZSsmxzCB9fQS9AJYCaeCPSJrW7s4p/DZ39NgDDk/sDlJ6I7I2RAQC/yW5p/4hL/xDpm9K5d9ATofM3iysC8jQzViUNwtLXweV/EuwsORLIvBi75DsNVCZwHeTsvUB+dPHKX7B+qJl4h3ynz1KvHAbFl14pvITeO/kJ4CTITfDJ1b6P7GVf0jhH7LAufAMyb3alDWTLLwvbH4GEfqFTK9QRF5FgaQS99/OfYqCh8BNlYRiYYvQO1/yyE2VhOr4xH5tPNqqoPTHJK8lVkA8Q7I3oSb7n/8H29KnBnd8gicAAAAASUVORK5CYII=";
-const MAP = DATA.map || { places:[], events:[] };
-const PLACE = {}; MAP.places.forEach(p=>{ PLACE[p.name] = p });
+let MAP, PLACE;
+function buildMap(){ MAP = DATA.map || { places:[], events:[] }; PLACE = {}; MAP.places.forEach(p=>{ PLACE[p.name] = p }) }
+buildMap();
 // 1つの出来事から「場所当て」と「出来事当て」の2問をつくる（出来事のない地名は場所当てだけ）
 const mapQs = () => MAP.events.filter(e=>inRange(e.unit)).flatMap(e=>
   [{ kind:"where", e, id:"MW:"+e.id, unit:e.unit }].concat(e.event ? [{ kind:"what", e, id:"MT:"+e.id, unit:e.unit }] : []));
-if(MAP.events.length){
-  MODES.mapWhere = { name:"地図・場所当て",   tag:"地理", desc:"説明を読んで、地図から場所を選ぶ", n:10, list:()=>mapQs().filter(q=>q.kind==="where"), id:q=>q.id };
-  MODES.mapWhat  = { name:"地図・出来事当て", tag:"地理", desc:"地図の印の場所で起きたことを選ぶ", n:10, list:()=>mapQs().filter(q=>q.kind==="what"),  id:q=>q.id };
+MODES.mapWhere = { name:"地図・場所当て",   tag:"地理", desc:"説明を読んで、地図から場所を選ぶ", n:10, list:()=>mapQs().filter(q=>q.kind==="where"), id:q=>q.id };
+MODES.mapWhat  = { name:"地図・出来事当て", tag:"地理", desc:"地図の印の場所で起きたことを選ぶ", n:10, list:()=>mapQs().filter(q=>q.kind==="what"),  id:q=>q.id };
+// その科目にデータがあるモードだけをホーム画面に出す
+const hasMode = k => ({ rengo: DATA.terms.some(t=>t.hints), ichi: DATA.terms.length>0, sort: (DATA.sorts||[]).length>0,
+  tf: (DATA.truefalse||[]).length>0, mapWhere: MAP.events.length>0, mapWhat: MAP.events.some(e=>e.event) })[k];
+function switchSubject(key){
+  S.unitsBy[SUBJ] = S.units;
+  SUBJ = key; S.subject = key; DATA = DATASETS[key];
+  buildStar(); buildMap();
+  S.units = (S.unitsBy[key] || []).filter(u=>DATA.units.includes(u));
+  if(!S.units.length) S.units = [DATA.units[0]];
+  save(); home(); window.scrollTo(0, 0);
 }
 const tooClose = (a, b) => Math.hypot(a.x-b.x, a.y-b.y) < 0.075;
 const blocked = (a, b) => a.name===b.name || (a.noMix||[]).includes(b.name) || (b.noMix||[]).includes(a.name);
@@ -300,10 +347,40 @@ const streakNow = () => (S.lastDay===new Date().toDateString() || S.lastDay===ne
 
 /* ---------- 画面 ---------- */
 const app = document.getElementById("app");
+const FONT = [ { label:"標準", size:"100%" }, { label:"大", size:"140%" }, { label:"特大", size:"180%" } ];
+function applyFont(){ document.documentElement.style.fontSize = FONT[S.font||0].size }
+const fontBtn = () => `<button class="ghost fontbtn" data-font aria-label="文字の大きさを切り替える（いまは${FONT[S.font||0].label}）">文字：${FONT[S.font||0].label}</button>`;
+document.addEventListener("click", e=>{
+  const b = e.target.closest("[data-font]"); if(!b) return;
+  S.font = ((S.font||0) + 1) % FONT.length; save(); applyFont();
+  document.querySelectorAll("[data-font]").forEach(x=>{ x.outerHTML = fontBtn() });
+});
+applyFont();
+// 横長の画面（PCなど）では、問題を左、解答の選択肢を右に分ける。
+// 各画面の描き方はそのままにして、描いたあとに要素を左右の箱へ振り分ける
+const SIDE = ".choices, .nums, .tf, .pool, #after";
+new MutationObserver(()=>{
+  const inQuiz = !!app.querySelector(":scope > .qhead");
+  app.classList.toggle("quiz", inQuiz || !!app.querySelector(":scope > .split"));
+  if(!inQuiz || app.querySelector(":scope > .split")) return;
+  const split = document.createElement("div"), main = document.createElement("div"), side = document.createElement("div");
+  split.className = "split"; main.className = "qmain"; side.className = "qside";
+  [...app.children].forEach(el=>{
+    if(el.matches(".qhead") || (el.tagName==="H2" && !main.children.length)) return;   // 上の見出しはそのまま
+    (el.matches(SIDE) ? side : main).appendChild(el);
+  });
+  split.append(main, side); app.appendChild(split);
+}).observe(app, { childList:true });
 const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let timer = null;
 function clearTimer(){ if(timer){ clearInterval(timer); timer=null } }
 
+function subjectBar(){
+  if(SUBJECTS.length < 2) return "";
+  const cur = SUBJECTS.find(x=>x.key===SUBJ), other = SUBJECTS.find(x=>x.key!==SUBJ);
+  return `<div class="subj"><div><span class="muted">科目</span><b>${esc(cur.name)}</b></div>
+    <button class="ghost" id="subj" data-to="${other.key}">〈${esc(other.name)}に切り替え〉</button></div>`;
+}
 function home(){
   clearTimer();
   const sn = syncSeason(), r = rankOf(S.seasonXp, sn.theme);
@@ -318,25 +395,27 @@ function home(){
       <div class="muted">${r.max ? "最高位に到達しました" : `次の「${esc(sn.theme.ranks[r.lv+1])}」まで ${r.next-r.rest} 経験値`}${streakNow()>1?`　・連続${streakNow()}日`:""}</div>
     </div>
   </section>
+  ${subjectBar()}
   <fieldset class="units"><legend>範囲 <span class="muted">${terms().length}語</span></legend>
-    <div class="unitgrid">${DATA.units.map(u=>`<label class="ucheck"><input type="checkbox" value="${u}" ${inRange(u)?"checked":""}><span>${u.replace("講","")}<small>講</small></span></label>`).join("")}
+    <div class="unitgrid">${DATA.units.map(u=>`<label class="ucheck ${/講$/.test(u)?"":"era"}"><input type="checkbox" value="${u}" ${inRange(u)?"checked":""}><span>${/講$/.test(u)?`${u.replace("講","")}<small>講</small>`:esc(u)}</span></label>`).join("")}
     <button class="ghost" id="allu" type="button" ${S.units.length===DATA.units.length?"disabled":""}>すべて選ぶ</button></div>
     </div></fieldset>
-  <fieldset class="units"><legend>重要度</legend>
+  ${DATA.hasStars===false ? "" : `<fieldset class="units"><legend>重要度</legend>
     <div class="unitgrid">
       <label class="ucheck"><input type="checkbox" data-star="on" ${S.stars.on?"checked":""}><span>★<small>あり</small></span></label>
       <label class="ucheck"><input type="checkbox" data-star="off" ${S.stars.off?"checked":""}><span>☆<small>なし</small></span></label>
-    </div></fieldset>
+    </div></fieldset>`}
   <p class="muted" id="umsg"></p>
   <section class="modes">
-    ${Object.entries(MODES).map(([k,m])=>{
+    ${Object.entries(MODES).filter(([k])=>hasMode(k)).map(([k,m])=>{
       const ids = m.ids(), ms = mastery(ids);
       return `<button class="mode" data-mode="${k}"><span class="tag">${m.tag}</span><b>${m.name}</b><span class="muted">${m.desc}</span>
       <span class="stat">問題数 <b>${ids.length}</b></span>
       ${ms?`<span class="stat">達成度 <i class="lv ${ms.cls}">${ms.label}</i></span>`:""}</button>`}).join("")}
   </section>
-  <div class="row"><button class="ghost" id="coll">称号コレクション</button><button class="ghost" id="move">引き継ぎ</button></div>
-  <p class="muted">収録：第${DATA.units[0].replace("講","")}〜${DATA.units[DATA.units.length-1]}。記録はこの端末のブラウザに保存されます。</p>`;
+  <div class="row"><button class="ghost" id="coll">称号コレクション</button><button class="ghost" id="move">引き継ぎ</button>${fontBtn()}</div>
+  <p class="muted">収録：${/講$/.test(DATA.units[0]) ? `第${DATA.units[0].replace("講","")}〜${DATA.units[DATA.units.length-1]}` : `${DATA.units[0]}〜${DATA.units[DATA.units.length-1]}`}。記録はこの端末のブラウザに保存されます。</p>`;
+  const sb = document.getElementById("subj"); if(sb) sb.onclick = ()=>switchSubject(sb.dataset.to);
   app.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>start(b.dataset.mode));
   app.querySelectorAll(".ucheck input[data-star]").forEach(cb=>cb.onchange=()=>{
     const on = app.querySelector('[data-star="on"]').checked, off = app.querySelector('[data-star="off"]').checked;
@@ -368,7 +447,7 @@ function header(){
   const it = SES.qs[SES.i];
   return `<div class="qhead"><button class="ghost" id="quit">やめる</button>
   <div class="prog bar"><i style="width:${SES.i/SES.qs.length*100}%"></i></div>
-  <span>${SES.i+1}/${SES.qs.length}</span></div>
+  <span>${SES.i+1}/${SES.qs.length}</span>${fontBtn()}</div>
   <h2>${esc(sesTitle())}${isRetry()?`<span class="retry">もう一度</span>`:""}</h2>`;
 }
 // 途中でやめても、それまでの経験値は受け取れる
@@ -407,22 +486,27 @@ function cracker(){
   const W = innerWidth, H = innerHeight;
   for(const side of [0,1]){
     for(let k=0;k<70;k++){
-      const ang = (side ? 180+28 : -28) * Math.PI/180 + (Math.random()-.5)*0.9; // 斜め上へ
-      const sp = 9 + Math.random()*9;
-      fxParts.push({ x: side ? W+5 : -5, y: H*0.92, vx: Math.cos(ang)*sp*(side?1:1), vy: -Math.abs(Math.sin(ang))*sp - 4,
+      // 画面の上の方（問題文や選択肢のあたり）まで届くように、到達する高さから打ち上げの速さを決める
+      const top = H*(0.05 + Math.random()*0.45);           // 紙吹雪がいちばん高く上がる位置（画面の上から）
+      const vy = -launchSpeed(H*0.92 - top);
+      const vx = (side ? -1 : 1) * W*(0.12 + Math.random()*0.42)/45;   // 画面の中央あたりまで広がる
+      fxParts.push({ x: side ? W+5 : -5, y: H*0.92, vx, vy,
         w: 5+Math.random()*6, h: 3+Math.random()*5, r: Math.random()*6, vr: (Math.random()-.5)*.4,
         c: COLORS[k%COLORS.length], life: 0 });
     }
   }
   if(!fxRun){ fxRun = true; requestAnimationFrame(fxTick) }
 }
+// 重力と空気抵抗のもとで、高さ h まで上がる初速を求める
+function peakOf(v){ let y=0, vy=-v, m=0; for(let i=0;i<400;i++){ vy+=0.32; vy*=0.985; y+=vy; if(y<m) m=y; if(vy>0) break } return -m }
+function launchSpeed(h){ let lo=2, hi=90; for(let i=0;i<18;i++){ const mid=(lo+hi)/2; if(peakOf(mid)<h) lo=mid; else hi=mid } return hi }
 function fxTick(){
   const cv = document.getElementById("fx"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,innerWidth,innerHeight);
-  fxParts = fxParts.filter(p => p.life < 110 && p.y < innerHeight + 40);
+  fxParts = fxParts.filter(p => p.life < 190 && p.y < innerHeight + 40);
   for(const p of fxParts){
     p.life++; p.vy += 0.32; p.vx *= 0.985; p.vy *= 0.985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
-    ctx.save(); ctx.globalAlpha = Math.max(0, 1 - p.life/110);
+    ctx.save(); ctx.globalAlpha = p.life < 120 ? 1 : Math.max(0, 1 - (p.life-120)/70);
     ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle = p.c;
     ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h*Math.abs(Math.cos(p.life*0.2))+1); ctx.restore();
   }
@@ -489,7 +573,7 @@ function qRengo(t){
     const xp = ok && !re ? PTS[shown-1] : 0;
     award(xp, ok); markChoices(t.term, b.dataset.ans);
     const msg = !ok ? "お手つき　0点" : re ? `正解　ヒント${shown}つ` : `正解　ヒント${shown}つで +${xp}`;
-    document.getElementById("after").innerHTML = `<div class="fb ${ok?"ok":"ng"}"><strong>${msg}</strong>${ok&&!learned&&!re?`<div class="muted">ヒント4まで見たので、あとでもう一度出ます</div>`:""}${esc(t.term)}：${esc(t.meaning)}${trapLine(t)}</div>${nextBtn()}`;
+    document.getElementById("after").innerHTML = `<div class="fb ${ok?"ok":"ng"}"><strong>${msg}</strong>${ok&&!learned&&!re?`<div class="muted">ヒント4まで見たので、あとでもう一度出ます</div>`:""}${esc(t.term)}：${esc(DATA.near ? (t.significance||t.meaning) : t.meaning)}${trapLine(t)}</div>${nextBtn()}`;
     bindNext(); save();
   });
 }
@@ -498,12 +582,12 @@ function qSort(s){
   const order = s.items.map((_,i)=>i), pool = shuffle(order.slice()), placed = [];
   function draw(judged){
     app.innerHTML = header() + `
-      <div class="card"><div class="muted">テーマ</div><div class="qtext">${esc(s.theme)}</div><div class="muted">古い順に、下のカードをタップして並べよう</div></div>
+      <div class="card"><div class="muted">テーマ</div><div class="qtext">${esc(s.theme)}</div><div class="muted">カードをタップして、古い順に並べよう</div></div>
       <div class="slots">${order.map(k=>{
         const it = placed[k]!==undefined ? s.items[placed[k]] : null;
         const cls = judged ? (placed[k]===k?"ok":"ng") : "";
-        return `<button class="slot ${it?"filled":""} ${cls}" data-slot="${k}" ${judged?"disabled":""}>${it?esc(it.text):""}${judged&&it?`<em>${it.year}</em>`:""}</button>`}).join("")}</div>
-      <div class="pool">${pool.map(i=>placed.includes(i)
+        return `<button class="slot ${it?"filled":""} ${cls}" data-slot="${k}" ${judged?"disabled":""}>${it?esc(it.text):""}${judged&&it?`<em>${it.label||it.year}</em>`:""}</button>`}).join("")}</div>
+      <div class="pool" ${placed.length===order.length?"hidden":""}>${pool.map(i=>placed.includes(i)
         ? `<span class="tile used" aria-hidden="true">${esc(s.items[i].text)}</span>`  /* 置いたカードの場所は空けたままにして、ほかのカードが動かないようにする */
         : `<button class="tile" data-i="${i}">${esc(s.items[i].text)}</button>`).join("")}</div>
       <div id="after">${judged?"":`<button class="primary" id="judge" ${placed.length<order.length?"disabled":""}>判定する</button>`}</div>`;
@@ -516,7 +600,7 @@ function qSort(s){
       const ok = placed.every((v,k)=>v===k);
       const xp = settle("S:"+s.id, ok) + (ok && !isRetry() ? 100 : 0);
       award(xp, ok); draw(true);
-      document.getElementById("after").innerHTML = `<div class="fb ${ok?"ok":"ng"}"><strong>${ok?okLabel(xp):"おしい"}</strong>${ok?"":"正しい順："+s.items.map(x=>`${esc(x.text)}（${x.year}）`).join(" → ")}</div>${nextBtn()}`;
+      document.getElementById("after").innerHTML = `<div class="fb ${ok?"ok":"ng"}"><strong>${ok?okLabel(xp):"おしい"}</strong>${ok?"":"正しい順："+s.items.map(x=>`${esc(x.text)}（${x.label||x.year}）`).join(" → ")}</div>${nextBtn()}`;
       bindNext(); save();
     };
   }
